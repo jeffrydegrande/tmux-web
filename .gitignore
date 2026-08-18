@@ -1,3 +1,5 @@
 /tmux-web
 /tmuxweb
 /config.toml
+.playwright-mcp/
+*.png

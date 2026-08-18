@@ -43,6 +43,11 @@ type Config struct {
 	LinearAPIKey string `toml:"linear_api_key"`
 	// Groups holds the projects a new window can target, split by group.
 	Groups []Group `toml:"group"`
+	// SearchDirs holds base directories to scan for more projects. The picker
+	// lists each immediate subdirectory. A leading "~" expands to the home
+	// directory. A picked directory starts a session named after its basename.
+	// It needs no treehouse pool.
+	SearchDirs []string `toml:"search_dirs"`
 }
 
 // Session returns the tmux session name for a repo. tmux treats "." and ":" as
@@ -105,7 +110,28 @@ func LoadConfig(path string) (*Config, error) {
 	if count == 0 {
 		return nil, fmt.Errorf("config lists no repos")
 	}
+
+	for i, dir := range c.SearchDirs {
+		abs, err := expandPath(dir)
+		if err != nil {
+			return nil, fmt.Errorf("search_dirs %q: %w", dir, err)
+		}
+		c.SearchDirs[i] = abs
+	}
 	return &c, nil
+}
+
+// expandPath expands a leading "~" to the home directory, then returns the
+// absolute, cleaned path.
+func expandPath(p string) (string, error) {
+	if p == "~" || strings.HasPrefix(p, "~/") {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", err
+		}
+		p = filepath.Join(home, strings.TrimPrefix(p, "~"))
+	}
+	return filepath.Abs(p)
 }
 
 // RepoByID finds a configured repo across all groups. It returns nil when no

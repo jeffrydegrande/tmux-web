@@ -85,6 +85,7 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	}
 	s.render(w, "index.html", map[string]any{
 		"Groups":   s.cfg.Groups,
+		"Projects": s.cfg.DiscoverProjects(),
 		"Sessions": sessions,
 		"Prompt":   s.cfg.Prompt,
 		"Linear":   s.linear != nil,
@@ -103,24 +104,66 @@ func (s *Server) handleTickets(w http.ResponseWriter, r *http.Request) {
 		s.render(w, "tickets.html", map[string]any{"Error": err.Error()})
 		return
 	}
-	views := make([]ticketView, 0, len(issues))
-	for _, issue := range issues {
-		v := ticketView{Issue: issue}
-		if repo := s.cfg.RepoByTeam(issue.TeamKey); repo != nil {
-			v.RepoID = repo.ID
-			v.RepoName = repo.Name
+	s.render(w, "tickets.html", map[string]any{"Groups": groupTickets(s.cfg, issues)})
+}
+
+// prActions are the prompts a pull request can start Claude Code with. The user
+// picks the pull request first, then picks one of these.
+var prActions = []struct {
+	Label     string
+	Suffix    string
+	PromptFmt string
+}{
+	{"Deep review", "review", "deep review on PR %d"},
+	{"Fix merge conflicts", "fix", "fix merge conflicts on PR %d"},
+}
+
+// pullActionView is one prompt choice for a pull request. Name is the window
+// name. Prompt is the Claude Code prompt.
+type pullActionView struct {
+	Label  string
+	Name   string
+	Prompt string
+}
+
+// pullView is one pull request with its prompt choices.
+type pullView struct {
+	Number  int
+	Title   string
+	Author  string
+	Actions []pullActionView
+}
+
+// repoPullsView groups pull requests by repo for the template.
+type repoPullsView struct {
+	RepoID   string
+	RepoName string
+	Error    string
+	Pulls    []pullView
+}
+
+// handlePulls lists open GitHub pull requests, grouped by repo. Each pull
+// request offers a choice of prompts. The choice opens a window named after the
+// pull request and the action.
+func (s *Server) handlePulls(w http.ResponseWriter, r *http.Request) {
+	repos := s.cfg.PullRequestsByRepo()
+	views := make([]repoPullsView, 0, len(repos))
+	for _, rp := range repos {
+		v := repoPullsView{RepoID: rp.RepoID, RepoName: rp.RepoName, Error: rp.Error}
+		for _, p := range rp.Pulls {
+			pv := pullView{Number: p.Number, Title: p.Title, Author: p.Author}
+			for _, a := range prActions {
+				pv.Actions = append(pv.Actions, pullActionView{
+					Label:  a.Label,
+					Name:   fmt.Sprintf("pr-%d-%s", p.Number, a.Suffix),
+					Prompt: fmt.Sprintf(a.PromptFmt, p.Number),
+				})
+			}
+			v.Pulls = append(v.Pulls, pv)
 		}
 		views = append(views, v)
 	}
-	s.render(w, "tickets.html", map[string]any{"Issues": views})
-}
-
-// handlePulls lists open GitHub pull requests across every configured repo. The
-// start button opens a window named after the pull request. The prompt asks
-// Claude Code for a deep review.
-func (s *Server) handlePulls(w http.ResponseWriter, r *http.Request) {
-	repos := s.cfg.PullRequestsByRepo()
-	s.render(w, "pulls.html", map[string]any{"Repos": repos})
+	s.render(w, "pulls.html", map[string]any{"Repos": views})
 }
 
 // ticketView pairs a ticket with the repo its Linear team maps to. RepoID is
@@ -130,6 +173,41 @@ type ticketView struct {
 	Issue
 	RepoID   string
 	RepoName string
+}
+
+// ticketGroup holds the tickets that map to one project. Tickets with no mapped
+// team fall in a group named "Other".
+type ticketGroup struct {
+	RepoName string
+	Issues   []ticketView
+}
+
+// groupTickets groups tickets by the repo their Linear team maps to. It keeps
+// the order in which each group first appears.
+func groupTickets(cfg *Config, issues []Issue) []*ticketGroup {
+	var order []string
+	byKey := map[string]*ticketGroup{}
+	for _, issue := range issues {
+		repo := cfg.RepoByTeam(issue.TeamKey)
+		key, name := "", "Other"
+		v := ticketView{Issue: issue}
+		if repo != nil {
+			key, name = repo.ID, repo.Name
+			v.RepoID, v.RepoName = repo.ID, repo.Name
+		}
+		g, ok := byKey[key]
+		if !ok {
+			g = &ticketGroup{RepoName: name}
+			byKey[key] = g
+			order = append(order, key)
+		}
+		g.Issues = append(g.Issues, v)
+	}
+	groups := make([]*ticketGroup, 0, len(order))
+	for _, k := range order {
+		groups = append(groups, byKey[k])
+	}
+	return groups
 }
 
 func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
@@ -162,7 +240,17 @@ func (s *Server) handleNewWindow(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err)
 		return
 	}
-	repo := s.cfg.RepoByID(r.FormValue("repo"))
+	// The value is a configured repo id, or a "dir:" path from the project
+	// picker. A project starts a session in its own directory with no worktree.
+	value := r.FormValue("repo")
+	worktree := true
+	var repo *Repo
+	if path, ok := strings.CutPrefix(value, projectPrefix); ok {
+		repo = s.cfg.ProjectRepo(path)
+		worktree = false
+	} else {
+		repo = s.cfg.RepoByID(value)
+	}
 	if repo == nil {
 		http.Error(w, "unknown repo", http.StatusBadRequest)
 		return
@@ -176,7 +264,7 @@ func (s *Server) handleNewWindow(w http.ResponseWriter, r *http.Request) {
 		name = generateName()
 	}
 
-	reused, err := startWindow(repo, name, prompt)
+	reused, err := startWindow(repo, name, prompt, worktree)
 	if err != nil {
 		s.render(w, "new_result.html", map[string]any{"Error": err.Error()})
 		return
@@ -195,10 +283,12 @@ func (s *Server) handleNewWindow(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// startWindow runs the full flow: ensure the session, lease a worktree, then
-// open a window that starts Claude Code. It returns true when a window with the
-// same name already existed, so the worktree lease is left untouched.
-func startWindow(repo *Repo, name, prompt string) (reused bool, err error) {
+// startWindow runs the full flow: ensure the session, lease a worktree when the
+// target uses one, then open a window that starts Claude Code. It returns true
+// when a window with the same name already existed, so the worktree lease is
+// left untouched. A project target (worktree false) runs Claude Code in the
+// project directory itself.
+func startWindow(repo *Repo, name, prompt string, worktree bool) (reused bool, err error) {
 	if err := EnsureSession(repo.Session(), repo.Path); err != nil {
 		return false, err
 	}
@@ -209,11 +299,14 @@ func startWindow(repo *Repo, name, prompt string) (reused bool, err error) {
 	if exists {
 		return true, nil
 	}
-	worktree, err := LeaseWorktree(repo.Path, name)
-	if err != nil {
-		return false, err
+	dir := repo.Path
+	if worktree {
+		dir, err = LeaseWorktree(repo.Path, name)
+		if err != nil {
+			return false, err
+		}
 	}
-	return false, NewWindow(repo.Session(), name, worktree, prompt)
+	return false, NewWindow(repo.Session(), name, dir, prompt)
 }
 
 // sanitizeName maps a name to tmux-safe characters. tmux uses "." and ":" as

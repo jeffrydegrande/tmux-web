@@ -16,6 +16,11 @@ prompt = ""
 # environment variable overrides this field.
 linear_api_key = ""
 
+# Base directories to scan for more projects. The picker lists each immediate
+# subdirectory. A leading "~" expands to your home directory. A picked project
+# starts a session named after its basename. It needs no treehouse pool.
+search_dirs = ["~/Code"]
+
 # Each [[group]] is a heading in the repo picker. Each [[group.repo]] is a
 # project. "id" and "name" default from the path. Each repo needs a treehouse
 # pool; run "treehouse init" in the repo first.

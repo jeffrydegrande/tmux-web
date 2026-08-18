@@ -27,6 +27,9 @@
             {{range .Groups}}<optgroup label="{{.Name}}">
               {{range .Repos}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
             </optgroup>{{end}}
+            {{range .Projects}}<optgroup label="{{.Base}}">
+              {{range .Projects}}<option value="{{.Value}}">{{.Name}}</option>{{end}}
+            </optgroup>{{end}}
           </select>
         </label>
         <label class="field">
@@ -60,9 +63,8 @@
         <button class="ghost" hx-get="/pulls" hx-target="#pulls" hx-swap="innerHTML"
                 aria-label="Refresh pull requests">&#x21bb;</button>
       </div>
-      <p class="hint">Start opens a window named after the pull request. The
-        prompt is "deep review on PR &lt;number&gt;". The window opens in the
-        repo the pull request belongs to.</p>
+      <p class="hint">Tap a pull request, then pick a prompt. The window opens
+        in the repo the pull request belongs to.</p>
       <div id="pulls" hx-get="/pulls" hx-trigger="load">
         <p class="empty">loading pull requests...</p>
       </div>

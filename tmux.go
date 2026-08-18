@@ -155,9 +155,16 @@ func runTmux(args ...string) (string, error) {
 	return stdout.String(), nil
 }
 
+// noServer reports whether a tmux error means no server is running. On a fresh
+// boot the socket file does not exist yet, so tmux prints "error connecting to
+// <socket> (No such file or directory)". Older or attached states print "no
+// server running" or "no current session". The tool treats all of these as an
+// empty session list, not a hard failure.
 func noServer(err error) bool {
-	return strings.Contains(err.Error(), "no server running") ||
-		strings.Contains(err.Error(), "no current session")
+	s := err.Error()
+	return strings.Contains(s, "no server running") ||
+		strings.Contains(s, "no current session") ||
+		strings.Contains(s, "error connecting to")
 }
 
 func splitLines(s string) []string {

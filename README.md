@@ -11,13 +11,17 @@ one binary. The page needs no internet.
 
 - Lists every tmux session and window.
 - Shows a text snapshot of any window.
-- Starts a new window for a repo you pick. A prompt is optional.
-- Lists your assigned Linear tickets. One tap starts a window for a ticket.
-  Tickets in review do not show; the pull requests list covers those.
-- Lists open GitHub pull requests. One tap starts a window with the prompt
-  `deep review on PR <number>`.
+- Starts a new window for a repo you pick. A prompt is optional. The picker
+  also lists projects found under your `search_dirs`.
+- Lists your assigned Linear tickets, grouped per project. One tap starts a
+  window for a ticket. Tickets in review do not show; the pull requests list
+  covers those.
+- Lists open GitHub pull requests, grouped per project. Tap a pull request,
+  then pick a prompt: `deep review on PR <number>` or
+  `fix merge conflicts on PR <number>`.
 
-Tapping the same ticket or pull request again reuses its window.
+Tapping the same ticket again, or picking the same pull request prompt again,
+reuses its window.
 
 ## Requirements
 
@@ -45,6 +49,7 @@ The config is TOML at `~/.config/tmux-web/config.toml`.
 listen = ":8080"
 prompt = ""
 linear_api_key = ""
+search_dirs = ["~/Code"]
 
 [[group]]
 name = "Work"
@@ -59,6 +64,8 @@ name = "Work"
 - `prompt`: default prompt in the new-window form.
 - `linear_api_key`: a Linear personal API key. Blank hides the tickets list.
   The `LINEAR_API_KEY` environment variable overrides it.
+- `search_dirs`: base directories to scan for more projects. The picker lists
+  each immediate subdirectory. A picked project needs no treehouse pool.
 - `[[group]]`: a heading in the repo picker.
 - `[[group.repo]]`: a project. `linear_team` maps a Linear team key to the repo.
 

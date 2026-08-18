@@ -153,7 +153,7 @@ button {
 .ttitle { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
 .tstate { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
 
-/* pull requests, grouped by repo */
+/* pull requests and tickets, grouped by repo */
 .pullgroup + .pullgroup { margin-top: 14px; }
 .grouphead {
   margin: 0 0 8px;
@@ -163,15 +163,46 @@ button {
   font-family: var(--mono);
 }
 
+/* pull request: a row that opens to a prompt choice */
+.pr details { background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; }
+.prsum {
+  display: grid;
+  grid-template-columns: auto auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 12px;
+  cursor: pointer;
+  list-style: none;
+}
+.prsum::-webkit-details-marker { display: none; }
+.prsum::before { content: "\25b8"; color: var(--muted); font-size: 11px; }
+.pr details[open] .prsum::before { content: "\25be"; }
+.pr details[open] .prsum { border-bottom: 1px solid var(--border); }
+.practions { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 12px; }
+.prstart {
+  position: relative;
+  flex: 1 1 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+  font-size: 14px;
+  padding: 10px 14px;
+}
+.prstart:active { transform: translateY(1px); }
+
 /* start-button feedback while the request is in flight */
 .start.htmx-request { opacity: 0.6; pointer-events: none; }
 .start.htmx-request .tstate,
 .start.htmx-request .trepo { visibility: hidden; }
-.start .spin {
-  position: absolute;
-  right: 12px;
-  top: 50%;
-  margin-top: -8px;
+.prstart.htmx-request { opacity: 0.6; pointer-events: none; }
+.prstart.htmx-request .palabel { visibility: hidden; }
+
+/* spinner, shown while a start button waits for the server */
+.spin {
   width: 16px;
   height: 16px;
   border-radius: 50%;
@@ -180,7 +211,10 @@ button {
   animation: spin 0.6s linear infinite;
   display: none;
 }
-.start.htmx-request .spin { display: block; }
+.start .spin { position: absolute; right: 12px; top: 50%; margin-top: -8px; }
+.prstart .spin { position: absolute; }
+.start.htmx-request .spin,
+.prstart.htmx-request .spin { display: block; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* sessions */
