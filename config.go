@@ -48,6 +48,10 @@ type Config struct {
 	// directory. A picked directory starts a session named after its basename.
 	// It needs no treehouse pool.
 	SearchDirs []string `toml:"search_dirs"`
+	// PRLabel filters the pull requests list to pull requests that carry this
+	// label. Blank lists every open pull request. Set it to the label your CI
+	// gate adds when a deep review is required, e.g. "needs-team-review".
+	PRLabel string `toml:"pr_label"`
 }
 
 // Session returns the tmux session name for a repo. tmux treats "." and ":" as

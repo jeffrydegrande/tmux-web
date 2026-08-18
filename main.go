@@ -164,7 +164,7 @@ func (s *Server) handlePulls(w http.ResponseWriter, r *http.Request) {
 		}
 		views = append(views, v)
 	}
-	s.render(w, "pulls.html", map[string]any{"Repos": views})
+	s.render(w, "pulls.html", map[string]any{"Repos": views, "Label": s.cfg.PRLabel})
 }
 
 // ticketView pairs a ticket with the repo its Linear team maps to. RepoID is

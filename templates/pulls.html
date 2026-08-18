@@ -1,6 +1,7 @@
 {{define "pulls.html"}}
 {{if not .Repos}}
-  <p class="empty">No open pull requests.</p>
+  {{if .Label}}<p class="empty">No pull requests need review.</p>
+  {{else}}<p class="empty">No open pull requests.</p>{{end}}
 {{else}}
 {{range .Repos}}
   {{if .Error}}

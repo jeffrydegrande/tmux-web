@@ -68,6 +68,9 @@ name = "Work"
 - `search_dirs`: base directories to scan for more projects. The search box
   filters their immediate subdirectories. A picked project needs no treehouse
   pool.
+- `pr_label`: filter the pull requests list to a label. Blank lists every open
+  pull request you own. Set it to the label your CI gate adds when a deep review
+  is required, e.g. `needs-team-review`.
 - `[[group]]`: a heading in the repo picker.
 - `[[group.repo]]`: a project. `linear_team` maps a Linear team key to the repo.
 

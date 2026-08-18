@@ -16,13 +16,18 @@ type PullRequest struct {
 }
 
 // ListPullRequests returns the viewer's open pull requests for the repo at dir.
-// It runs `gh pr list --author @me`, so gh must be on PATH and authenticated. It
+// It runs `gh pr list --author @me`, so gh must be on PATH and authenticated. A
+// non-empty label limits the result to pull requests that carry that label. It
 // returns an error when the repo has no GitHub remote or gh is not
 // authenticated.
-func ListPullRequests(dir string) ([]PullRequest, error) {
-	cmd := exec.Command("gh", "pr", "list",
+func ListPullRequests(dir, label string) ([]PullRequest, error) {
+	args := []string{"pr", "list",
 		"--state", "open", "--author", "@me", "--limit", "50",
-		"--json", "number,title,author,headRefName")
+		"--json", "number,title,author,headRefName"}
+	if label != "" {
+		args = append(args, "--label", label)
+	}
+	cmd := exec.Command("gh", args...)
 	cmd.Dir = dir
 
 	var stdout, stderr strings.Builder
@@ -89,7 +94,7 @@ func (c *Config) PullRequestsByRepo() []repoPulls {
 	for i, j := range jobs {
 		go func(i int, j job) {
 			r := repoPulls{RepoID: j.id, RepoName: j.name}
-			pulls, err := ListPullRequests(j.path)
+			pulls, err := ListPullRequests(j.path, c.PRLabel)
 			if err != nil {
 				r.Error = err.Error()
 			} else {
