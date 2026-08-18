@@ -16,7 +16,7 @@ and starts new tmux windows that run Claude Code in a treehouse worktree. See
 - `treehouse.go`: worktree leases.
 - `linear.go`: Linear API client for assigned tickets.
 - `github.go`: `gh pr list` wrapper for open pull requests.
-- `projects.go`: search-dir scan for the project picker.
+- `projects.go`: search-dir scan for the project search box.
 - `templates/*.html`: HTML templates. HTMX drives the interactions.
 - `static/`: CSS and the embedded HTMX script.
 - `systemd/`: the user service unit.

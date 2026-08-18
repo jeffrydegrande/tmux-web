@@ -15,12 +15,13 @@ type PullRequest struct {
 	Branch string // head branch name
 }
 
-// ListPullRequests returns the open pull requests for the repo at dir. It runs
-// `gh pr list`, so gh must be on PATH and authenticated. It returns an error
-// when the repo has no GitHub remote or gh is not authenticated.
+// ListPullRequests returns the viewer's open pull requests for the repo at dir.
+// It runs `gh pr list --author @me`, so gh must be on PATH and authenticated. It
+// returns an error when the repo has no GitHub remote or gh is not
+// authenticated.
 func ListPullRequests(dir string) ([]PullRequest, error) {
 	cmd := exec.Command("gh", "pr", "list",
-		"--state", "open", "--limit", "50",
+		"--state", "open", "--author", "@me", "--limit", "50",
 		"--json", "number,title,author,headRefName")
 	cmd.Dir = dir
 

@@ -11,13 +11,14 @@ one binary. The page needs no internet.
 
 - Lists every tmux session and window.
 - Shows a text snapshot of any window.
-- Starts a new window for a repo you pick. A prompt is optional. The picker
-  also lists projects found under your `search_dirs`.
+- Starts a new window for a repo you pick. A prompt is optional.
+- Finds more projects with a search box. It filters the subdirectories under
+  your `search_dirs`. One tap starts a session for a project.
 - Lists your assigned Linear tickets, grouped per project. One tap starts a
   window for a ticket. Tickets in review do not show; the pull requests list
   covers those.
-- Lists open GitHub pull requests, grouped per project. Tap a pull request,
-  then pick a prompt: `deep review on PR <number>` or
+- Lists your own open GitHub pull requests, grouped per project. Tap a pull
+  request, then pick a prompt: `deep review on PR <number>` or
   `fix merge conflicts on PR <number>`.
 
 Tapping the same ticket again, or picking the same pull request prompt again,
@@ -64,8 +65,9 @@ name = "Work"
 - `prompt`: default prompt in the new-window form.
 - `linear_api_key`: a Linear personal API key. Blank hides the tickets list.
   The `LINEAR_API_KEY` environment variable overrides it.
-- `search_dirs`: base directories to scan for more projects. The picker lists
-  each immediate subdirectory. A picked project needs no treehouse pool.
+- `search_dirs`: base directories to scan for more projects. The search box
+  filters their immediate subdirectories. A picked project needs no treehouse
+  pool.
 - `[[group]]`: a heading in the repo picker.
 - `[[group.repo]]`: a project. `linear_team` maps a Linear team key to the repo.
 

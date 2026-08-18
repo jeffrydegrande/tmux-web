@@ -67,6 +67,7 @@ func main() {
 	mux.HandleFunc("GET /sessions", srv.handleSessions)
 	mux.HandleFunc("GET /tickets", srv.handleTickets)
 	mux.HandleFunc("GET /pulls", srv.handlePulls)
+	mux.HandleFunc("GET /projects", srv.handleProjects)
 	mux.HandleFunc("GET /snapshot", srv.handleSnapshot)
 	mux.HandleFunc("POST /windows", srv.handleNewWindow)
 	mux.Handle("GET /static/", http.FileServer(http.FS(staticFS)))
@@ -85,7 +86,6 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	}
 	s.render(w, "index.html", map[string]any{
 		"Groups":   s.cfg.Groups,
-		"Projects": s.cfg.DiscoverProjects(),
 		"Sessions": sessions,
 		"Prompt":   s.cfg.Prompt,
 		"Linear":   s.linear != nil,
@@ -126,11 +126,12 @@ type pullActionView struct {
 	Prompt string
 }
 
-// pullView is one pull request with its prompt choices.
+// pullView is one pull request with its prompt choices. The list shows only the
+// viewer's own pull requests, so it shows the branch, not the author.
 type pullView struct {
 	Number  int
 	Title   string
-	Author  string
+	Branch  string
 	Actions []pullActionView
 }
 
@@ -151,7 +152,7 @@ func (s *Server) handlePulls(w http.ResponseWriter, r *http.Request) {
 	for _, rp := range repos {
 		v := repoPullsView{RepoID: rp.RepoID, RepoName: rp.RepoName, Error: rp.Error}
 		for _, p := range rp.Pulls {
-			pv := pullView{Number: p.Number, Title: p.Title, Author: p.Author}
+			pv := pullView{Number: p.Number, Title: p.Title, Branch: p.Branch}
 			for _, a := range prActions {
 				pv.Actions = append(pv.Actions, pullActionView{
 					Label:  a.Label,
@@ -208,6 +209,19 @@ func groupTickets(cfg *Config, issues []Issue) []*ticketGroup {
 		groups = append(groups, byKey[k])
 	}
 	return groups
+}
+
+// handleProjects returns projects that match the search query. It caps the
+// result so a search dir with hundreds of projects stays usable.
+func (s *Server) handleProjects(w http.ResponseWriter, r *http.Request) {
+	const limit = 25
+	query := r.URL.Query().Get("q")
+	hits := s.cfg.SearchProjects(query, limit)
+	s.render(w, "project_results.html", map[string]any{
+		"Query":  strings.TrimSpace(query),
+		"Hits":   hits,
+		"Capped": len(hits) == limit,
+	})
 }
 
 func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {

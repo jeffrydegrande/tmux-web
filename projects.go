@@ -5,59 +5,72 @@ import (
 	"path/filepath"
 	"slices"
 	"sort"
+	"strings"
 )
 
 // Project is one directory found under a search dir. A picked project starts a
 // tmux session named after its basename.
 type Project struct {
-	// Name is the directory basename, shown in the picker.
+	// Name is the directory basename, shown in the result.
 	Name string
-	// Value is the option value in the form. It carries the path with a "dir:"
-	// prefix, so the window handler can tell it apart from a configured repo id.
+	// Base is the search dir the project sits in, shortened with "~". It tells
+	// apart two projects with the same name.
+	Base string
+	// Value is the form value. It carries the path with a "dir:" prefix, so the
+	// window handler can tell it apart from a configured repo id.
 	Value string
-}
-
-// ProjectGroup holds the projects found under one search dir. Base is the label
-// shown in the picker, e.g. "~/Code".
-type ProjectGroup struct {
-	Base     string
-	Projects []Project
 }
 
 // projectPrefix marks a form value as a search-dir path, not a repo id.
 const projectPrefix = "dir:"
 
-// DiscoverProjects scans each search dir for immediate subdirectories. It
-// returns one group per search dir that holds at least one subdirectory. It
-// skips a search dir that does not exist or can not be read. The lists are
-// sorted by name.
-func (c *Config) DiscoverProjects() []ProjectGroup {
+// SearchProjects returns projects whose name matches the query. The match is a
+// case-insensitive substring. A blank query returns nothing, because the search
+// dirs can hold hundreds of projects. Names that start with the query rank
+// first. The result is capped at limit.
+func (c *Config) SearchProjects(query string, limit int) []Project {
+	query = strings.ToLower(strings.TrimSpace(query))
+	if query == "" {
+		return nil
+	}
 	home, _ := os.UserHomeDir()
 
-	var groups []ProjectGroup
+	var hits []Project
 	for _, base := range c.SearchDirs {
 		entries, err := os.ReadDir(base)
 		if err != nil {
 			continue
 		}
-		var projects []Project
+		short := shortenHome(base, home)
 		for _, e := range entries {
 			if !e.IsDir() || e.Name() == "" || e.Name()[0] == '.' {
 				continue
 			}
-			path := filepath.Join(base, e.Name())
-			projects = append(projects, Project{
+			if !strings.Contains(strings.ToLower(e.Name()), query) {
+				continue
+			}
+			hits = append(hits, Project{
 				Name:  e.Name(),
-				Value: projectPrefix + path,
+				Base:  short,
+				Value: projectPrefix + filepath.Join(base, e.Name()),
 			})
 		}
-		if len(projects) == 0 {
-			continue
-		}
-		sort.Slice(projects, func(i, j int) bool { return projects[i].Name < projects[j].Name })
-		groups = append(groups, ProjectGroup{Base: shortenHome(base, home), Projects: projects})
 	}
-	return groups
+	sort.Slice(hits, func(i, j int) bool {
+		pi := strings.HasPrefix(strings.ToLower(hits[i].Name), query)
+		pj := strings.HasPrefix(strings.ToLower(hits[j].Name), query)
+		if pi != pj {
+			return pi // a prefix match ranks before a mid-string match
+		}
+		if hits[i].Name != hits[j].Name {
+			return hits[i].Name < hits[j].Name
+		}
+		return hits[i].Base < hits[j].Base
+	})
+	if limit > 0 && len(hits) > limit {
+		hits = hits[:limit]
+	}
+	return hits
 }
 
 // ProjectRepo turns a validated search-dir path into a Repo. The session name

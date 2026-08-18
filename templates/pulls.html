@@ -16,18 +16,20 @@
           <summary class="prsum">
             <span class="tid">#{{.Number}}</span>
             <span class="ttitle">{{.Title}}</span>
-            <span class="tstate">{{.Author}}</span>
           </summary>
-          <div class="practions">
-            {{range .Actions}}
-            <button class="prstart"
-                    hx-post="/windows"
-                    hx-vals='{"repo": {{$repo | printf "%q"}}, "name": {{.Name | printf "%q"}}, "prompt": {{.Prompt | printf "%q"}}}'
-                    hx-target="#new-result" hx-swap="innerHTML">
-              <span class="palabel">{{.Label}}</span>
-              <span class="spin" aria-hidden="true"></span>
-            </button>
-            {{end}}
+          <div class="prbody">
+            {{if .Branch}}<div class="prbranch">{{.Branch}}</div>{{end}}
+            <div class="practions">
+              {{range .Actions}}
+              <button class="prstart"
+                      hx-post="/windows"
+                      hx-vals='{"repo": {{$repo | printf "%q"}}, "name": {{.Name | printf "%q"}}, "prompt": {{.Prompt | printf "%q"}}}'
+                      hx-target="#new-result" hx-swap="innerHTML">
+                <span class="palabel">{{.Label}}</span>
+                <span class="spin" aria-hidden="true"></span>
+              </button>
+              {{end}}
+            </div>
           </div>
         </details>
       </li>

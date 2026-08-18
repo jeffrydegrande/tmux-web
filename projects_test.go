@@ -6,9 +6,9 @@ import (
 	"testing"
 )
 
-func TestDiscoverProjects(t *testing.T) {
+func TestSearchProjects(t *testing.T) {
 	base := t.TempDir()
-	for _, name := range []string{"api", "web", ".hidden"} {
+	for _, name := range []string{"api", "apiary", "myapi", "web", ".hidden"} {
 		if err := os.Mkdir(filepath.Join(base, name), 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -17,23 +17,33 @@ func TestDiscoverProjects(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(base, "readme"), []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-
 	cfg := &Config{SearchDirs: []string{base, "/does/not/exist"}}
-	groups := cfg.DiscoverProjects()
-	if len(groups) != 1 {
-		t.Fatalf("groups = %d, want 1 (missing dir skipped)", len(groups))
+
+	// A blank query returns nothing.
+	if hits := cfg.SearchProjects("", 25); hits != nil {
+		t.Errorf("blank query returned %d hits, want 0", len(hits))
 	}
+
+	// Prefix matches rank before mid-string matches, then sort by name.
+	hits := cfg.SearchProjects("api", 25)
 	got := []string{}
-	for _, p := range groups[0].Projects {
-		got = append(got, p.Name)
+	for _, h := range hits {
+		got = append(got, h.Name)
 	}
-	// Sorted, no hidden dir, no file.
-	want := []string{"api", "web"}
-	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
-		t.Errorf("projects = %v, want %v", got, want)
+	want := []string{"api", "apiary", "myapi"}
+	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] || got[2] != want[2] {
+		t.Errorf("hits = %v, want %v", got, want)
 	}
-	if p := groups[0].Projects[0]; p.Value != projectPrefix+filepath.Join(base, "api") {
-		t.Errorf("value = %q", p.Value)
+	if hits[0].Value != projectPrefix+filepath.Join(base, "api") {
+		t.Errorf("value = %q", hits[0].Value)
+	}
+
+	// A miss returns an empty list. The limit caps the result.
+	if hits := cfg.SearchProjects("zzz", 25); len(hits) != 0 {
+		t.Errorf("miss returned %d hits, want 0", len(hits))
+	}
+	if hits := cfg.SearchProjects("api", 1); len(hits) != 1 {
+		t.Errorf("limit 1 returned %d hits, want 1", len(hits))
 	}
 }
 

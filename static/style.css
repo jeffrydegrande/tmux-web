@@ -208,6 +208,22 @@ button {
 }
 .ghost:active { color: var(--green); border-color: var(--green); transform: rotate(180deg); }
 
+/* project finder: a search box that beats a huge dropdown */
+.finder { margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--border); }
+.search {
+  width: 100%;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  font-size: 16px; /* keeps iOS from zooming */
+  font-family: var(--mono);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.search::placeholder { color: var(--muted); }
+.search:focus { outline: none; border-color: var(--green); box-shadow: 0 0 0 3px var(--green-dim); }
+#project-results:not(:empty) { margin-top: 8px; }
+
 .hint { color: var(--muted); font-size: 12.5px; margin: 0 0 10px; }
 .empty { color: var(--muted); font-size: 13px; font-family: var(--mono); margin: 4px 0; }
 .ok { color: var(--green); font-size: 13px; margin: 10px 0 0; }
@@ -269,6 +285,16 @@ button {
   padding: 2px 8px;
   white-space: nowrap;
 }
+/* branch on a pull request, or base dir on a project result */
+.pbranch {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+  max-width: 34vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 /* pull request: a row that opens to a prompt choice */
 .pr details {
@@ -281,7 +307,7 @@ button {
 .pr details[open] { border-color: var(--border-lit); border-left-color: var(--blue); }
 .prsum {
   display: grid;
-  grid-template-columns: auto auto 1fr auto;
+  grid-template-columns: auto auto 1fr;
   align-items: center;
   gap: 10px;
   padding: 10px 12px;
@@ -292,6 +318,16 @@ button {
 .prsum::before { content: "\25b8"; color: var(--muted); font-size: 10px; transition: transform 0.15s, color 0.15s; }
 .pr details[open] .prsum::before { transform: rotate(90deg); color: var(--blue); }
 .pr details[open] .prsum { border-bottom: 1px solid var(--border); }
+.prbranch {
+  padding: 9px 12px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.prbranch::before { content: "\2387  "; color: var(--blue); }
 .practions { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 12px; }
 .prstart {
   position: relative;
@@ -325,7 +361,7 @@ button {
 .start.htmx-request,
 .prstart.htmx-request { opacity: 0.65; pointer-events: none; }
 .start.htmx-request .tstate,
-.start.htmx-request .trepo,
+.start.htmx-request .pbranch,
 .prstart.htmx-request .palabel { visibility: hidden; }
 
 /* spinner */

@@ -1,0 +1,25 @@
+{{define "project_results.html"}}
+{{if .Query}}
+{{if not .Hits}}
+  <p class="empty">No project matches "{{.Query}}".</p>
+{{else}}
+<ul class="ticketlist">
+  {{range .Hits}}
+  <li>
+    <button class="start"
+            hx-post="/windows"
+            hx-vals='{"repo": {{.Value | printf "%q"}}, "name": {{.Name | printf "%q"}}}'
+            hx-include="[name=prompt]"
+            hx-target="#new-result" hx-swap="innerHTML">
+      <span class="tid">&#x25b8;</span>
+      <span class="ttitle">{{.Name}}</span>
+      <span class="pbranch">{{.Base}}</span>
+      <span class="spin" aria-hidden="true"></span>
+    </button>
+  </li>
+  {{end}}
+</ul>
+{{if .Capped}}<p class="hint">Showing first 25. Type more to narrow.</p>{{end}}
+{{end}}
+{{end}}
+{{end}}
