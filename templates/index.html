@@ -1,0 +1,76 @@
+{{define "index.html"}}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="dark light">
+  <title>tmux</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d1117'/%3E%3Cpath d='M7 10l6 6-6 6' stroke='%233fb950' stroke-width='2.6' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M16 22h9' stroke='%232f81f7' stroke-width='2.6' stroke-linecap='round'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/htmx.min.js"></script>
+</head>
+<body>
+  <header class="top">
+    <h1>tmux</h1>
+    <button class="ghost" hx-get="/sessions" hx-target="#sessions" hx-swap="innerHTML"
+            aria-label="Refresh sessions">&#x21bb;</button>
+  </header>
+
+  <main>
+    <section class="card new">
+      <h2>New window</h2>
+      <form hx-post="/windows" hx-target="#new-result" hx-swap="innerHTML"
+            hx-on::after-request="if(event.detail.successful) this.reset()">
+        <label class="field">
+          <span>Repo</span>
+          <select id="repo" name="repo">
+            {{range .Groups}}<optgroup label="{{.Name}}">
+              {{range .Repos}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+            </optgroup>{{end}}
+          </select>
+        </label>
+        <label class="field">
+          <span>Prompt <em>(optional)</em></span>
+          <textarea name="prompt" rows="2" placeholder="Work on...">{{.Prompt}}</textarea>
+        </label>
+        <button type="submit" class="primary">Start</button>
+      </form>
+      <div id="new-result" aria-live="polite"></div>
+    </section>
+
+    {{if .Linear}}
+    <section class="card tickets">
+      <div class="cardhead">
+        <h2>My tickets</h2>
+        <button class="ghost" hx-get="/tickets" hx-target="#tickets" hx-swap="innerHTML"
+                aria-label="Refresh tickets">&#x21bb;</button>
+      </div>
+      <p class="hint">Start opens a window named after the ticket. The prompt is
+        "Work on ticket number &lt;id&gt;". The ticket opens in the repo mapped
+        to its Linear team. A ticket with no mapped team uses the repo above.</p>
+      <div id="tickets" hx-get="/tickets" hx-trigger="load">
+        <p class="empty">loading tickets...</p>
+      </div>
+    </section>
+    {{end}}
+
+    <section class="card pulls">
+      <div class="cardhead">
+        <h2>Pull requests</h2>
+        <button class="ghost" hx-get="/pulls" hx-target="#pulls" hx-swap="innerHTML"
+                aria-label="Refresh pull requests">&#x21bb;</button>
+      </div>
+      <p class="hint">Start opens a window named after the pull request. The
+        prompt is "deep review on PR &lt;number&gt;". The window opens in the
+        repo the pull request belongs to.</p>
+      <div id="pulls" hx-get="/pulls" hx-trigger="load">
+        <p class="empty">loading pull requests...</p>
+      </div>
+    </section>
+
+    <section id="sessions">
+      {{template "sessions.html" .}}
+    </section>
+  </main>
+</body>
+</html>{{end}}

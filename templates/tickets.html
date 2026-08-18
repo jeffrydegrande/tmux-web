@@ -1,0 +1,24 @@
+{{define "tickets.html"}}
+{{if .Error}}
+  <p class="err">{{.Error}}</p>
+{{else if not .Issues}}
+  <p class="empty">No open tickets are assigned to you.</p>
+{{else}}
+<ul class="ticketlist">
+  {{range .Issues}}
+  <li class="ticket">
+    <button class="start"
+            hx-post="/windows"
+            {{if .RepoID}}hx-vals='{"repo": {{.RepoID | printf "%q"}}, "name": {{.Identifier | printf "%q"}}, "prompt": {{printf "Work on ticket number %s" .Identifier | printf "%q"}}}'{{else}}hx-include="#repo" hx-vals='{"name": {{.Identifier | printf "%q"}}, "prompt": {{printf "Work on ticket number %s" .Identifier | printf "%q"}}}'{{end}}
+            hx-target="#new-result" hx-swap="innerHTML">
+      <span class="tid">{{.Identifier}}</span>
+      <span class="ttitle">{{.Title}}</span>
+      <span class="tstate">{{.State}}</span>
+      <span class="trepo">{{if .RepoID}}{{.RepoName}}{{else}}selected repo{{end}}</span>
+      <span class="spin" aria-hidden="true"></span>
+    </button>
+  </li>
+  {{end}}
+</ul>
+{{end}}
+{{end}}

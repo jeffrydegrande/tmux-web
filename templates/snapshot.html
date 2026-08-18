@@ -1,0 +1,9 @@
+{{define "snapshot.html"}}
+{{if .Error}}
+  <pre class="err">{{.Error}}</pre>
+{{else}}
+  <pre>{{.Text}}</pre>
+  <button class="ghost small" hx-get="/snapshot?target={{.Target}}"
+          hx-target="closest .snap" hx-swap="innerHTML">&#x21bb; refresh</button>
+{{end}}
+{{end}}

@@ -1,0 +1,30 @@
+{{define "sessions.html"}}
+{{if not .Sessions}}
+  <p class="empty">No tmux sessions are running.</p>
+{{end}}
+{{range .Sessions}}
+{{$session := .Name}}
+<div class="card session">
+  <h2>
+    {{$session}}
+    {{if .Attached}}<span class="dot on" title="attached"></span>{{end}}
+  </h2>
+  <ul class="windows">
+    {{range .Windows}}
+    <li class="window">
+      <div class="wrow">
+        <span class="wname{{if .Active}} active{{end}}">{{.Index}}: {{.Name}}</span>
+        <span class="panes">{{.Panes}}p</span>
+      </div>
+      <details hx-get="/snapshot?target={{$session}}:{{.Index}}"
+               hx-trigger="toggle once"
+               hx-target="find .snap" hx-swap="innerHTML">
+        <summary>snapshot</summary>
+        <div class="snap"><pre class="loading">loading...</pre></div>
+      </details>
+    </li>
+    {{end}}
+  </ul>
+</div>
+{{end}}
+{{end}}

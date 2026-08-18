@@ -1,0 +1,14 @@
+{{define "new_result.html"}}
+{{if .Error}}
+  <p class="err">{{.Error}}</p>
+{{else}}
+  {{if .Reused}}
+  <p class="ok">Window <strong>{{.Window}}</strong> already runs in <strong>{{.Session}}</strong>. Left it alone.</p>
+  {{else}}
+  <p class="ok">Started <strong>{{.Window}}</strong> in <strong>{{.Session}}</strong>.</p>
+  {{end}}
+  <div id="sessions" hx-swap-oob="innerHTML">
+    {{template "sessions.html" .}}
+  </div>
+{{end}}
+{{end}}

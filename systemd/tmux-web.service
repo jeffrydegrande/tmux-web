@@ -1,0 +1,34 @@
+[Unit]
+Description=tmux-web: tmux sessions over HTTP
+Documentation=https://github.com/jeffrydegrande/tmux-web
+After=default.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/tmux-web
+
+# A user service starts with a minimal PATH. tmux, treehouse, claude, and gh
+# must all be found. tmux and gh live in /usr/sbin on this host.
+Environment=PATH=%h/.local/bin:%h/go/bin:/usr/local/bin:/usr/bin:/usr/sbin:/bin
+
+# The new-window flow runs "exec $SHELL" after Claude Code exits.
+Environment=SHELL=/usr/bin/zsh
+
+# An empty DISPLAY stops Claude Code from opening a browser, the same as the
+# interactive shell wrapper.
+Environment=DISPLAY=
+
+# git runs over SSH for treehouse fetches. BatchMode makes ssh fail fast instead
+# of waiting for a passphrase or host-key prompt that a service can not answer.
+# The keys must have no passphrase for this to work without an agent.
+Environment=GIT_SSH_COMMAND=ssh -o BatchMode=yes
+
+# Optional secrets, for example LINEAR_API_KEY=lin_api_...
+# The leading "-" makes the file optional.
+EnvironmentFile=-%h/.config/tmux-web/env
+
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=default.target

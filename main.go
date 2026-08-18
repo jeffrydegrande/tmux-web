@@ -1,0 +1,252 @@
+package main
+
+import (
+	"crypto/rand"
+	"embed"
+	"encoding/hex"
+	"flag"
+	"fmt"
+	"html/template"
+	"log"
+	"net/http"
+	"os"
+	"strings"
+	"time"
+)
+
+//go:embed templates/*.html
+var templateFS embed.FS
+
+//go:embed static/*
+var staticFS embed.FS
+
+// Server holds the shared state for the HTTP handlers.
+type Server struct {
+	cfg    *Config
+	tmpl   *template.Template
+	linear *LinearClient
+}
+
+func main() {
+	configFlag := flag.String("config", "", "path to the config file (default: XDG config dir)")
+	listen := flag.String("listen", "", "override the listen address")
+	flag.Parse()
+
+	configPath, err := ConfigPath(*configFlag)
+	if err != nil {
+		log.Fatalf("config: %v", err)
+	}
+	if created, err := EnsureConfig(configPath); err != nil {
+		log.Fatalf("config: %v", err)
+	} else if created {
+		log.Printf("wrote a default config to %s; edit it to match your repos", configPath)
+	}
+
+	cfg, err := LoadConfig(configPath)
+	if err != nil {
+		log.Fatalf("config: %v", err)
+	}
+	if *listen != "" {
+		cfg.Listen = *listen
+	}
+
+	tmpl, err := template.ParseFS(templateFS, "templates/*.html")
+	if err != nil {
+		log.Fatalf("templates: %v", err)
+	}
+
+	apiKey := cfg.LinearAPIKey
+	if env := os.Getenv("LINEAR_API_KEY"); env != "" {
+		apiKey = env
+	}
+
+	srv := &Server{cfg: cfg, tmpl: tmpl, linear: NewLinearClient(apiKey)}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /{$}", srv.handleIndex)
+	mux.HandleFunc("GET /sessions", srv.handleSessions)
+	mux.HandleFunc("GET /tickets", srv.handleTickets)
+	mux.HandleFunc("GET /pulls", srv.handlePulls)
+	mux.HandleFunc("GET /snapshot", srv.handleSnapshot)
+	mux.HandleFunc("POST /windows", srv.handleNewWindow)
+	mux.Handle("GET /static/", http.FileServer(http.FS(staticFS)))
+
+	log.Printf("tmux-web listening on %s", cfg.Listen)
+	if err := http.ListenAndServe(cfg.Listen, mux); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
+	sessions, err := ListSessions()
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	s.render(w, "index.html", map[string]any{
+		"Groups":   s.cfg.Groups,
+		"Sessions": sessions,
+		"Prompt":   s.cfg.Prompt,
+		"Linear":   s.linear != nil,
+	})
+}
+
+func (s *Server) handleTickets(w http.ResponseWriter, r *http.Request) {
+	if s.linear == nil {
+		s.render(w, "tickets.html", map[string]any{
+			"Error": "Set LINEAR_API_KEY to list tickets.",
+		})
+		return
+	}
+	issues, err := s.linear.Issues()
+	if err != nil {
+		s.render(w, "tickets.html", map[string]any{"Error": err.Error()})
+		return
+	}
+	views := make([]ticketView, 0, len(issues))
+	for _, issue := range issues {
+		v := ticketView{Issue: issue}
+		if repo := s.cfg.RepoByTeam(issue.TeamKey); repo != nil {
+			v.RepoID = repo.ID
+			v.RepoName = repo.Name
+		}
+		views = append(views, v)
+	}
+	s.render(w, "tickets.html", map[string]any{"Issues": views})
+}
+
+// handlePulls lists open GitHub pull requests across every configured repo. The
+// start button opens a window named after the pull request. The prompt asks
+// Claude Code for a deep review.
+func (s *Server) handlePulls(w http.ResponseWriter, r *http.Request) {
+	repos := s.cfg.PullRequestsByRepo()
+	s.render(w, "pulls.html", map[string]any{"Repos": repos})
+}
+
+// ticketView pairs a ticket with the repo its Linear team maps to. RepoID is
+// empty when no repo lists the team. Then the ticket falls back to the repo
+// selected in the form.
+type ticketView struct {
+	Issue
+	RepoID   string
+	RepoName string
+}
+
+func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
+	sessions, err := ListSessions()
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	s.render(w, "sessions.html", map[string]any{"Sessions": sessions})
+}
+
+func (s *Server) handleSnapshot(w http.ResponseWriter, r *http.Request) {
+	target := r.URL.Query().Get("target")
+	text, err := CapturePane(target)
+	if err != nil {
+		s.render(w, "snapshot.html", map[string]any{
+			"Target": target,
+			"Error":  err.Error(),
+		})
+		return
+	}
+	s.render(w, "snapshot.html", map[string]any{
+		"Target": target,
+		"Text":   text,
+	})
+}
+
+func (s *Server) handleNewWindow(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		s.fail(w, err)
+		return
+	}
+	repo := s.cfg.RepoByID(r.FormValue("repo"))
+	if repo == nil {
+		http.Error(w, "unknown repo", http.StatusBadRequest)
+		return
+	}
+	prompt := r.FormValue("prompt")
+
+	// A ticket passes its identifier as the name so the window is idempotent.
+	// A blank name means a plain new window with a generated name.
+	name := sanitizeName(r.FormValue("name"))
+	if name == "" {
+		name = generateName()
+	}
+
+	reused, err := startWindow(repo, name, prompt)
+	if err != nil {
+		s.render(w, "new_result.html", map[string]any{"Error": err.Error()})
+		return
+	}
+
+	sessions, err := ListSessions()
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	s.render(w, "new_result.html", map[string]any{
+		"Window":   name,
+		"Session":  repo.Session(),
+		"Reused":   reused,
+		"Sessions": sessions,
+	})
+}
+
+// startWindow runs the full flow: ensure the session, lease a worktree, then
+// open a window that starts Claude Code. It returns true when a window with the
+// same name already existed, so the worktree lease is left untouched.
+func startWindow(repo *Repo, name, prompt string) (reused bool, err error) {
+	if err := EnsureSession(repo.Session(), repo.Path); err != nil {
+		return false, err
+	}
+	exists, err := HasWindow(repo.Session(), name)
+	if err != nil {
+		return false, err
+	}
+	if exists {
+		return true, nil
+	}
+	worktree, err := LeaseWorktree(repo.Path, name)
+	if err != nil {
+		return false, err
+	}
+	return false, NewWindow(repo.Session(), name, worktree, prompt)
+}
+
+// sanitizeName maps a name to tmux-safe characters. tmux uses "." and ":" as
+// target separators, so they can not appear in a window name.
+func sanitizeName(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9',
+			r == '-', r == '_':
+			b.WriteRune(r)
+		default:
+			b.WriteRune('_')
+		}
+	}
+	return b.String()
+}
+
+// generateName builds a unique, readable window name. A short random suffix
+// avoids a collision when two windows start in the same second.
+func generateName() string {
+	var b [2]byte
+	_, _ = rand.Read(b[:])
+	return fmt.Sprintf("w-%s-%s", time.Now().Format("0102-1504"), hex.EncodeToString(b[:]))
+}
+
+func (s *Server) render(w http.ResponseWriter, name string, data any) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := s.tmpl.ExecuteTemplate(w, name, data); err != nil {
+		log.Printf("render %s: %v", name, err)
+	}
+}
+
+func (s *Server) fail(w http.ResponseWriter, err error) {
+	http.Error(w, err.Error(), http.StatusInternalServerError)
+}
