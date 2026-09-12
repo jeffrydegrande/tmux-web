@@ -65,6 +65,57 @@ func parsePulls(data []byte) ([]PullRequest, error) {
 	return pulls, nil
 }
 
+// SignOff posts the signoff status check for a pull request in the repo at dir.
+// It resolves the pull request head commit, then runs `gh signoff create` on
+// that commit. The head commit is on the remote, so no checkout is needed. It
+// returns an error when gh is not authenticated or the pull request is unknown.
+func SignOff(dir string, prNumber int) error {
+	if prNumber <= 0 {
+		return fmt.Errorf("invalid pr number %d", prNumber)
+	}
+	sha, err := prHeadSHA(dir, prNumber)
+	if err != nil {
+		return err
+	}
+
+	cmd := exec.Command("gh", "signoff", "create", "--commit", sha)
+	cmd.Dir = dir
+	var stderr strings.Builder
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("gh signoff create: %w: %s", err, strings.TrimSpace(stderr.String()))
+	}
+	return nil
+}
+
+// prHeadSHA returns the head commit sha of a pull request. It runs
+// `gh pr view <n> --json headRefOid`.
+func prHeadSHA(dir string, prNumber int) (string, error) {
+	cmd := exec.Command("gh", "pr", "view", fmt.Sprint(prNumber), "--json", "headRefOid")
+	cmd.Dir = dir
+	var stdout, stderr strings.Builder
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("gh pr view: %w: %s", err, strings.TrimSpace(stderr.String()))
+	}
+	return parseHeadRefOid([]byte(stdout.String()))
+}
+
+// parseHeadRefOid reads the head commit sha from `gh pr view --json headRefOid`.
+func parseHeadRefOid(data []byte) (string, error) {
+	var v struct {
+		HeadRefOid string `json:"headRefOid"`
+	}
+	if err := json.Unmarshal(data, &v); err != nil {
+		return "", fmt.Errorf("parse gh output: %w", err)
+	}
+	if v.HeadRefOid == "" {
+		return "", fmt.Errorf("gh returned no head commit")
+	}
+	return v.HeadRefOid, nil
+}
+
 // repoPulls holds the open pull requests for one repo. Error is set when the gh
 // call for the repo failed.
 type repoPulls struct {

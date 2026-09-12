@@ -10,6 +10,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -70,6 +71,7 @@ func main() {
 	mux.HandleFunc("GET /projects", srv.handleProjects)
 	mux.HandleFunc("GET /snapshot", srv.handleSnapshot)
 	mux.HandleFunc("POST /windows", srv.handleNewWindow)
+	mux.HandleFunc("POST /signoff", srv.handleSignoff)
 	mux.Handle("GET /static/", http.FileServer(http.FS(staticFS)))
 
 	log.Printf("tmux-web listening on %s", cfg.Listen)
@@ -165,6 +167,31 @@ func (s *Server) handlePulls(w http.ResponseWriter, r *http.Request) {
 		views = append(views, v)
 	}
 	s.render(w, "pulls.html", map[string]any{"Repos": views, "Label": s.cfg.PRLabel})
+}
+
+// handleSignoff posts the signoff status check for one pull request. It is a
+// direct action, not a Claude window. It returns a fragment that shows success
+// or the exact error next to the pull request.
+func (s *Server) handleSignoff(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		s.fail(w, err)
+		return
+	}
+	repo := s.cfg.RepoByID(r.FormValue("repo"))
+	if repo == nil {
+		s.render(w, "signoff_result.html", map[string]any{"Error": "unknown repo"})
+		return
+	}
+	number, err := strconv.Atoi(r.FormValue("number"))
+	if err != nil {
+		s.render(w, "signoff_result.html", map[string]any{"Error": "invalid pr number"})
+		return
+	}
+	if err := SignOff(repo.Path, number); err != nil {
+		s.render(w, "signoff_result.html", map[string]any{"Error": err.Error()})
+		return
+	}
+	s.render(w, "signoff_result.html", map[string]any{"Number": number})
 }
 
 // ticketView pairs a ticket with the repo its Linear team maps to. RepoID is

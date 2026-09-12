@@ -30,7 +30,15 @@
                 <span class="spin" aria-hidden="true"></span>
               </button>
               {{end}}
+              <button class="prstart signoff"
+                      hx-post="/signoff"
+                      hx-vals='{"repo": {{$repo | printf "%q"}}, "number": {{.Number}}}'
+                      hx-target="#signoff-{{.Number}}" hx-swap="innerHTML">
+                <span class="palabel">Sign off</span>
+                <span class="spin" aria-hidden="true"></span>
+              </button>
             </div>
+            <div id="signoff-{{.Number}}" class="signoff-result" aria-live="polite"></div>
           </div>
         </details>
       </li>

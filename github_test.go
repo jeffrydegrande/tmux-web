@@ -33,3 +33,23 @@ func TestParsePullsEmpty(t *testing.T) {
 		t.Errorf("got %d pulls, want 0", len(pulls))
 	}
 }
+
+// TestParseHeadRefOid checks that the gh pr view JSON maps to the head sha.
+// The sample is real output from `gh pr view <n> --json headRefOid`.
+func TestParseHeadRefOid(t *testing.T) {
+	sample := `{"headRefOid":"9fceb02d0ae598e95dc970b74767f19372d61af8"}`
+	sha, err := parseHeadRefOid([]byte(sample))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if sha != "9fceb02d0ae598e95dc970b74767f19372d61af8" {
+		t.Errorf("sha = %q", sha)
+	}
+}
+
+// TestParseHeadRefOidEmpty checks that a missing sha is an error.
+func TestParseHeadRefOidEmpty(t *testing.T) {
+	if _, err := parseHeadRefOid([]byte(`{"headRefOid":""}`)); err == nil {
+		t.Error("want error for empty sha")
+	}
+}
