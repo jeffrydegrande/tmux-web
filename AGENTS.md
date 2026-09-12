@@ -49,3 +49,10 @@ Run all three before you commit. `gofmt -l .` must print nothing.
 Write in Simplified Technical English. Short sentences. One idea per sentence.
 Active voice. Common words. Use a plain dash, never an em dash. This covers
 code comments, docs, and commit messages.
+
+## Maintaining this file
+
+Keep this file for knowledge useful to almost every future agent session in this project.
+Do not repeat what the codebase already shows; point to the authoritative file or command instead.
+Prefer rewriting or pruning existing entries over appending new ones.
+When updating this file, preserve this bar for all agents and keep entries concise.
