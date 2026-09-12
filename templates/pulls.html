@@ -9,7 +9,17 @@
   {{else}}
   {{$repo := .RepoID}}
   <div class="pullgroup">
-    <h3 class="grouphead">{{.RepoName}}</h3>
+    <h3 class="grouphead">
+      {{.RepoName}}
+      <button class="signall"
+              hx-post="/signoff-all"
+              hx-vals='{"repo": {{$repo | printf "%q"}}}'
+              hx-target="#signoff-all-{{$repo}}" hx-swap="innerHTML">
+        <span class="palabel">Sign all</span>
+        <span class="spin" aria-hidden="true"></span>
+      </button>
+    </h3>
+    <div id="signoff-all-{{$repo}}" class="signoff-result" aria-live="polite"></div>
     <ul class="ticketlist">
       {{range .Pulls}}
       <li class="pr">

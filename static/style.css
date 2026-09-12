@@ -235,6 +235,8 @@ button {
 /* new-window result line */
 #new-result:not(:empty) { margin-top: 12px; }
 .signoff-result:not(:empty) { padding: 0 12px 10px; }
+.signoff-fails { list-style: none; padding: 0; margin: 6px 0 0; }
+.signoff-fails li { font-size: 12px; margin-top: 4px; }
 
 /* lists grouped by project */
 .ticketlist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
@@ -257,6 +259,29 @@ button {
   height: 1px;
   background: linear-gradient(90deg, var(--border), transparent);
 }
+/* per-repo batch signoff: pinned right of the header line (amber) */
+.grouphead .signall {
+  order: 1;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--mono);
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  background: var(--amber-dim);
+  color: var(--amber);
+  border: 1px solid rgba(240, 180, 41, 0.4);
+  transition: transform 0.05s, box-shadow 0.15s;
+}
+.grouphead .signall:active { box-shadow: var(--glow-amber); transform: translateY(1px); }
+.grouphead .signall.htmx-request { opacity: 0.65; pointer-events: none; }
+.grouphead .signall.htmx-request .palabel { visibility: hidden; }
+.grouphead .signall .spin { position: absolute; }
+.grouphead .signall.htmx-request .spin { display: block; }
 
 /* ticket / plain start row */
 .start {

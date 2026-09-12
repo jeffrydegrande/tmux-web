@@ -72,6 +72,7 @@ func main() {
 	mux.HandleFunc("GET /snapshot", srv.handleSnapshot)
 	mux.HandleFunc("POST /windows", srv.handleNewWindow)
 	mux.HandleFunc("POST /signoff", srv.handleSignoff)
+	mux.HandleFunc("POST /signoff-all", srv.handleSignoffAll)
 	mux.Handle("GET /static/", http.FileServer(http.FS(staticFS)))
 
 	log.Printf("tmux-web listening on %s", cfg.Listen)
@@ -192,6 +193,34 @@ func (s *Server) handleSignoff(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.render(w, "signoff_result.html", map[string]any{"Number": number})
+}
+
+// handleSignoffAll signs off every open pull request in one repo. It lists the
+// repo pull requests, then calls SignOff for each. It returns a fragment that
+// shows the count signed and lists any failures. A failure on one pull request
+// does not stop the rest.
+func (s *Server) handleSignoffAll(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		s.fail(w, err)
+		return
+	}
+	repo := s.cfg.RepoByID(r.FormValue("repo"))
+	if repo == nil {
+		s.render(w, "signoff_all_result.html", map[string]any{"Error": "unknown repo"})
+		return
+	}
+	pulls, err := ListPullRequests(repo.Path, s.cfg.PRLabel)
+	if err != nil {
+		s.render(w, "signoff_all_result.html", map[string]any{"Error": err.Error()})
+		return
+	}
+	res := signOffAll(pulls, func(number int) error {
+		return SignOff(repo.Path, number)
+	})
+	s.render(w, "signoff_all_result.html", map[string]any{
+		"Signed":   res.Signed,
+		"Failures": res.Failures,
+	})
 }
 
 // ticketView pairs a ticket with the repo its Linear team maps to. RepoID is
