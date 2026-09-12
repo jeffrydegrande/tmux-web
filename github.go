@@ -66,15 +66,19 @@ func parsePulls(data []byte) ([]PullRequest, error) {
 }
 
 // SignOff posts the signoff status check for a pull request in the repo at dir.
-// It resolves the pull request head commit, then runs `gh signoff create` on
-// that commit. The head commit is on the remote, so no checkout is needed. It
-// returns an error when gh is not authenticated or the pull request is unknown.
+// It resolves the pull request head commit, fetches that commit into the repo,
+// then runs `gh signoff create` on it. The fetch makes the commit a local
+// object, so `gh signoff` can verify the commit is on the remote. It returns an
+// error when gh is not authenticated or the pull request is unknown.
 func SignOff(dir string, prNumber int) error {
 	if prNumber <= 0 {
 		return fmt.Errorf("invalid pr number %d", prNumber)
 	}
 	sha, err := prHeadSHA(dir, prNumber)
 	if err != nil {
+		return err
+	}
+	if err := fetchPRHead(dir, prNumber); err != nil {
 		return err
 	}
 
@@ -86,6 +90,54 @@ func SignOff(dir string, prNumber int) error {
 		return fmt.Errorf("gh signoff create: %w: %s", err, strings.TrimSpace(stderr.String()))
 	}
 	return nil
+}
+
+// fetchPRHead fetches the pull request head into the repo at dir. It runs
+// `git fetch origin refs/pull/<n>/head`. This refspec works even when the head
+// branch was renamed or deleted. The fetch makes the head commit a local
+// object.
+func fetchPRHead(dir string, prNumber int) error {
+	cmd := exec.Command("git", "fetch", "origin", pullHeadRef(prNumber))
+	cmd.Dir = dir
+	var stderr strings.Builder
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("git fetch pr head: %w: %s", err, strings.TrimSpace(stderr.String()))
+	}
+	return nil
+}
+
+// pullHeadRef returns the refspec for a pull request head on the remote.
+func pullHeadRef(prNumber int) string {
+	return fmt.Sprintf("refs/pull/%d/head", prNumber)
+}
+
+// signFailure is one pull request that failed to sign off.
+type signFailure struct {
+	Number int
+	Error  string
+}
+
+// signResult sums up a batch signoff. Signed is the count that signed. Failures
+// lists the pull requests that failed, with the exact error.
+type signResult struct {
+	Signed   int
+	Failures []signFailure
+}
+
+// signOffAll signs off every pull request with sign. It counts the ones that
+// signed and collects the failures. sign is a parameter so tests can cover the
+// loop without a real gh call. A failure does not stop the batch.
+func signOffAll(pulls []PullRequest, sign func(prNumber int) error) signResult {
+	var res signResult
+	for _, p := range pulls {
+		if err := sign(p.Number); err != nil {
+			res.Failures = append(res.Failures, signFailure{Number: p.Number, Error: err.Error()})
+			continue
+		}
+		res.Signed++
+	}
+	return res
 }
 
 // prHeadSHA returns the head commit sha of a pull request. It runs

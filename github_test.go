@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"fmt"
+	"testing"
+)
 
 // TestParsePulls checks that the gh pr list JSON shape maps to pull requests.
 // The sample is real output from `gh pr list --json number,title,author,headRefName`.
@@ -51,5 +54,31 @@ func TestParseHeadRefOid(t *testing.T) {
 func TestParseHeadRefOidEmpty(t *testing.T) {
 	if _, err := parseHeadRefOid([]byte(`{"headRefOid":""}`)); err == nil {
 		t.Error("want error for empty sha")
+	}
+}
+
+// TestPullHeadRef checks the refspec that SignOff fetches before it signs. The
+// fetch makes the head commit a local object, so `gh signoff` can verify it.
+func TestPullHeadRef(t *testing.T) {
+	if got := pullHeadRef(123); got != "refs/pull/123/head" {
+		t.Errorf("pullHeadRef(123) = %q", got)
+	}
+}
+
+// TestSignOffAll checks the batch loop. It counts the signed pull requests and
+// collects the failures. One failure does not stop the rest.
+func TestSignOffAll(t *testing.T) {
+	pulls := []PullRequest{{Number: 1}, {Number: 2}, {Number: 3}}
+	res := signOffAll(pulls, func(number int) error {
+		if number == 2 {
+			return fmt.Errorf("boom")
+		}
+		return nil
+	})
+	if res.Signed != 2 {
+		t.Errorf("signed = %d, want 2", res.Signed)
+	}
+	if len(res.Failures) != 1 || res.Failures[0].Number != 2 || res.Failures[0].Error != "boom" {
+		t.Errorf("failures = %+v", res.Failures)
 	}
 }
