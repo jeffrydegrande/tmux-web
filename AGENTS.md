@@ -4,25 +4,27 @@ Guidance for agents that work in this repo.
 
 ## What this is
 
-A single Go binary. It serves a mobile web UI over HTTP. It lists tmux sessions
-and starts new tmux windows that run Claude Code in a treehouse worktree. See
-`README.md` for the user view.
+A Go module with one binary. The binary serves a mobile web UI over HTTP. It
+lists tmux sessions and starts new tmux windows that run Claude Code in a
+treehouse worktree. See `README.md` for the user view. The module is
+`github.com/jeffrydegrande/tmux-web`.
 
 ## Layout
 
-- `main.go`: HTTP server, routes, and the new-window flow.
-- `config.go`, `default_config.go`: TOML config and defaults.
-- `tmux.go`: tmux commands (list, capture, new session, new window).
-- `treehouse.go`: worktree leases.
-- `linear.go`: Linear API client for assigned tickets.
-- `github.go`: `gh pr list` wrapper for open pull requests.
-- `projects.go`: search-dir scan for the project search box.
-- `templates/*.html`: HTML templates. HTMX drives the interactions.
-- `static/`: CSS and the embedded HTMX script.
+- `cmd/web/main.go`: HTTP server, routes, and the new-window flow.
+- `internal/config/`: TOML config, defaults, and the project search-dir scan.
+- `internal/tmux/`: tmux commands (list, capture, new session, new window).
+- `internal/treehouse/`: worktree leases.
+- `internal/linear/`: Linear API client for assigned tickets.
+- `internal/github/`: `gh pr list` wrapper for open pull requests.
+- `web/templates/*.html`: HTML templates. HTMX drives the interactions.
+- `web/static/`: CSS and the embedded HTMX script.
+- `web/web.go`: embeds the templates and static files.
 - `systemd/`: the user service unit.
 
-Templates, CSS, and HTMX are embedded with `//go:embed`. The binary is
-self-contained.
+The `web` package embeds the templates and static files with `//go:embed`. A
+Go embed pattern can not reach a parent directory, so the embed lives in `web`,
+next to the files, not in `cmd/web`. The binary is self-contained.
 
 ## Build, test, format
 

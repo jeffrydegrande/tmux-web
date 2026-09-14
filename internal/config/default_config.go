@@ -1,4 +1,4 @@
-package main
+package config
 
 // defaultConfig is written to the XDG config path at first startup. Edit the
 // file after that; the server never overwrites an existing config.

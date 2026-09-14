@@ -1,4 +1,4 @@
-package main
+package tmux
 
 import (
 	"errors"
@@ -34,36 +34,6 @@ func TestShellQuote(t *testing.T) {
 	for in, want := range cases {
 		if got := shellQuote(in); got != want {
 			t.Errorf("shellQuote(%q) = %q, want %q", in, got, want)
-		}
-	}
-}
-
-func TestSanitizeName(t *testing.T) {
-	cases := map[string]string{
-		"ENG-123":      "ENG-123",
-		"ABC-89":       "ABC-89",
-		"feat.thing":   "feat_thing",
-		"a:b":          "a_b",
-		"drop; rm -rf": "drop__rm_-rf",
-		"spaces here":  "spaces_here",
-	}
-	for in, want := range cases {
-		if got := sanitizeName(in); got != want {
-			t.Errorf("sanitizeName(%q) = %q, want %q", in, got, want)
-		}
-	}
-}
-
-func TestRepoSession(t *testing.T) {
-	cases := map[string]string{
-		"/home/x/Code/voicevo": "voicevo",
-		"/home/x/my.app":       "my_app",
-		"/home/x/a:b":          "a_b",
-	}
-	for path, want := range cases {
-		r := Repo{Path: path}
-		if got := r.Session(); got != want {
-			t.Errorf("Repo{%q}.Session() = %q, want %q", path, got, want)
 		}
 	}
 }

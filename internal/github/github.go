@@ -1,10 +1,12 @@
-package main
+package github
 
 import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
 	"strings"
+
+	"github.com/jeffrydegrande/tmux-web/internal/config"
 )
 
 // PullRequest is one open GitHub pull request in a repo.
@@ -112,27 +114,27 @@ func pullHeadRef(prNumber int) string {
 	return fmt.Sprintf("refs/pull/%d/head", prNumber)
 }
 
-// signFailure is one pull request that failed to sign off.
-type signFailure struct {
+// SignFailure is one pull request that failed to sign off.
+type SignFailure struct {
 	Number int
 	Error  string
 }
 
-// signResult sums up a batch signoff. Signed is the count that signed. Failures
+// SignResult sums up a batch signoff. Signed is the count that signed. Failures
 // lists the pull requests that failed, with the exact error.
-type signResult struct {
+type SignResult struct {
 	Signed   int
-	Failures []signFailure
+	Failures []SignFailure
 }
 
-// signOffAll signs off every pull request with sign. It counts the ones that
+// SignOffAll signs off every pull request with sign. It counts the ones that
 // signed and collects the failures. sign is a parameter so tests can cover the
 // loop without a real gh call. A failure does not stop the batch.
-func signOffAll(pulls []PullRequest, sign func(prNumber int) error) signResult {
-	var res signResult
+func SignOffAll(pulls []PullRequest, sign func(prNumber int) error) SignResult {
+	var res SignResult
 	for _, p := range pulls {
 		if err := sign(p.Number); err != nil {
-			res.Failures = append(res.Failures, signFailure{Number: p.Number, Error: err.Error()})
+			res.Failures = append(res.Failures, SignFailure{Number: p.Number, Error: err.Error()})
 			continue
 		}
 		res.Signed++
@@ -168,9 +170,9 @@ func parseHeadRefOid(data []byte) (string, error) {
 	return v.HeadRefOid, nil
 }
 
-// repoPulls holds the open pull requests for one repo. Error is set when the gh
+// RepoPulls holds the open pull requests for one repo. Error is set when the gh
 // call for the repo failed.
-type repoPulls struct {
+type RepoPulls struct {
 	RepoID   string
 	RepoName string
 	Pulls    []PullRequest
@@ -180,24 +182,24 @@ type repoPulls struct {
 // PullRequestsByRepo lists open pull requests for every configured repo. It runs
 // the gh calls in parallel. It returns one entry per repo that has open pull
 // requests or that failed. It drops repos with no pull requests and no error.
-func (c *Config) PullRequestsByRepo() []repoPulls {
+func PullRequestsByRepo(cfg *config.Config) []RepoPulls {
 	type job struct {
 		id, name, path string
 	}
 	var jobs []job
-	for gi := range c.Groups {
-		for ri := range c.Groups[gi].Repos {
-			repo := &c.Groups[gi].Repos[ri]
+	for gi := range cfg.Groups {
+		for ri := range cfg.Groups[gi].Repos {
+			repo := &cfg.Groups[gi].Repos[ri]
 			jobs = append(jobs, job{id: repo.ID, name: repo.Name, path: repo.Path})
 		}
 	}
 
-	results := make([]repoPulls, len(jobs))
+	results := make([]RepoPulls, len(jobs))
 	done := make(chan int, len(jobs))
 	for i, j := range jobs {
 		go func(i int, j job) {
-			r := repoPulls{RepoID: j.id, RepoName: j.name}
-			pulls, err := ListPullRequests(j.path, c.PRLabel)
+			r := RepoPulls{RepoID: j.id, RepoName: j.name}
+			pulls, err := ListPullRequests(j.path, cfg.PRLabel)
 			if err != nil {
 				r.Error = err.Error()
 			} else {
@@ -211,7 +213,7 @@ func (c *Config) PullRequestsByRepo() []repoPulls {
 		<-done
 	}
 
-	out := make([]repoPulls, 0, len(results))
+	out := make([]RepoPulls, 0, len(results))
 	for _, r := range results {
 		if len(r.Pulls) == 0 && r.Error == "" {
 			continue

@@ -1,4 +1,4 @@
-package main
+package github
 
 import (
 	"fmt"
@@ -69,7 +69,7 @@ func TestPullHeadRef(t *testing.T) {
 // collects the failures. One failure does not stop the rest.
 func TestSignOffAll(t *testing.T) {
 	pulls := []PullRequest{{Number: 1}, {Number: 2}, {Number: 3}}
-	res := signOffAll(pulls, func(number int) error {
+	res := SignOffAll(pulls, func(number int) error {
 		if number == 2 {
 			return fmt.Errorf("boom")
 		}
