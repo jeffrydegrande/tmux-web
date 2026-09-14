@@ -1,4 +1,4 @@
-module tmuxweb
+module github.com/jeffrydegrande/tmux-web
 
 go 1.26
 

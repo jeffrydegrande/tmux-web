@@ -1,0 +1,12 @@
+{{define "signoff_all_result.html"}}
+{{if .Error}}
+  <p class="err">{{.Error}}</p>
+{{else}}
+  <p class="ok">Signed off <strong>{{.Signed}}</strong> pull request{{if ne .Signed 1}}s{{end}}.</p>
+  {{if .Failures}}
+  <ul class="err signoff-fails">
+    {{range .Failures}}<li>PR #{{.Number}}: {{.Error}}</li>{{end}}
+  </ul>
+  {{end}}
+{{end}}
+{{end}}

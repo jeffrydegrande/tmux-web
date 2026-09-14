@@ -1,0 +1,7 @@
+{{define "signoff_result.html"}}
+{{if .Error}}
+  <p class="err">{{.Error}}</p>
+{{else}}
+  <p class="ok">Signed off PR <strong>#{{.Number}}</strong>. You can merge it now.</p>
+{{end}}
+{{end}}

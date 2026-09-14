@@ -1,4 +1,4 @@
-package main
+package config
 
 import (
 	"os"
@@ -21,8 +21,8 @@ type Project struct {
 	Value string
 }
 
-// projectPrefix marks a form value as a search-dir path, not a repo id.
-const projectPrefix = "dir:"
+// ProjectPrefix marks a form value as a search-dir path, not a repo id.
+const ProjectPrefix = "dir:"
 
 // SearchProjects returns projects whose name matches the query. The match is a
 // case-insensitive substring. A blank query returns nothing, because the search
@@ -52,7 +52,7 @@ func (c *Config) SearchProjects(query string, limit int) []Project {
 			hits = append(hits, Project{
 				Name:  e.Name(),
 				Base:  short,
-				Value: projectPrefix + filepath.Join(base, e.Name()),
+				Value: ProjectPrefix + filepath.Join(base, e.Name()),
 			})
 		}
 	}

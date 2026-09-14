@@ -2,7 +2,6 @@ package main
 
 import (
 	"crypto/rand"
-	"embed"
 	"encoding/hex"
 	"flag"
 	"fmt"
@@ -10,21 +9,23 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
+
+	"github.com/jeffrydegrande/tmux-web/internal/config"
+	"github.com/jeffrydegrande/tmux-web/internal/github"
+	"github.com/jeffrydegrande/tmux-web/internal/linear"
+	"github.com/jeffrydegrande/tmux-web/internal/tmux"
+	"github.com/jeffrydegrande/tmux-web/internal/treehouse"
+	"github.com/jeffrydegrande/tmux-web/web"
 )
-
-//go:embed templates/*.html
-var templateFS embed.FS
-
-//go:embed static/*
-var staticFS embed.FS
 
 // Server holds the shared state for the HTTP handlers.
 type Server struct {
-	cfg    *Config
+	cfg    *config.Config
 	tmpl   *template.Template
-	linear *LinearClient
+	linear *linear.Client
 }
 
 func main() {
@@ -32,17 +33,17 @@ func main() {
 	listen := flag.String("listen", "", "override the listen address")
 	flag.Parse()
 
-	configPath, err := ConfigPath(*configFlag)
+	configPath, err := config.ConfigPath(*configFlag)
 	if err != nil {
 		log.Fatalf("config: %v", err)
 	}
-	if created, err := EnsureConfig(configPath); err != nil {
+	if created, err := config.EnsureConfig(configPath); err != nil {
 		log.Fatalf("config: %v", err)
 	} else if created {
 		log.Printf("wrote a default config to %s; edit it to match your repos", configPath)
 	}
 
-	cfg, err := LoadConfig(configPath)
+	cfg, err := config.LoadConfig(configPath)
 	if err != nil {
 		log.Fatalf("config: %v", err)
 	}
@@ -50,7 +51,7 @@ func main() {
 		cfg.Listen = *listen
 	}
 
-	tmpl, err := template.ParseFS(templateFS, "templates/*.html")
+	tmpl, err := template.ParseFS(web.TemplateFS, "templates/*.html")
 	if err != nil {
 		log.Fatalf("templates: %v", err)
 	}
@@ -60,7 +61,7 @@ func main() {
 		apiKey = env
 	}
 
-	srv := &Server{cfg: cfg, tmpl: tmpl, linear: NewLinearClient(apiKey)}
+	srv := &Server{cfg: cfg, tmpl: tmpl, linear: linear.NewClient(apiKey)}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", srv.handleIndex)
@@ -70,7 +71,9 @@ func main() {
 	mux.HandleFunc("GET /projects", srv.handleProjects)
 	mux.HandleFunc("GET /snapshot", srv.handleSnapshot)
 	mux.HandleFunc("POST /windows", srv.handleNewWindow)
-	mux.Handle("GET /static/", http.FileServer(http.FS(staticFS)))
+	mux.HandleFunc("POST /signoff", srv.handleSignoff)
+	mux.HandleFunc("POST /signoff-all", srv.handleSignoffAll)
+	mux.Handle("GET /static/", http.FileServer(http.FS(web.StaticFS)))
 
 	log.Printf("tmux-web listening on %s", cfg.Listen)
 	if err := http.ListenAndServe(cfg.Listen, mux); err != nil {
@@ -79,7 +82,7 @@ func main() {
 }
 
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
-	sessions, err := ListSessions()
+	sessions, err := tmux.ListSessions()
 	if err != nil {
 		s.fail(w, err)
 		return
@@ -147,7 +150,7 @@ type repoPullsView struct {
 // request offers a choice of prompts. The choice opens a window named after the
 // pull request and the action.
 func (s *Server) handlePulls(w http.ResponseWriter, r *http.Request) {
-	repos := s.cfg.PullRequestsByRepo()
+	repos := github.PullRequestsByRepo(s.cfg)
 	views := make([]repoPullsView, 0, len(repos))
 	for _, rp := range repos {
 		v := repoPullsView{RepoID: rp.RepoID, RepoName: rp.RepoName, Error: rp.Error}
@@ -167,11 +170,64 @@ func (s *Server) handlePulls(w http.ResponseWriter, r *http.Request) {
 	s.render(w, "pulls.html", map[string]any{"Repos": views, "Label": s.cfg.PRLabel})
 }
 
+// handleSignoff posts the signoff status check for one pull request. It is a
+// direct action, not a Claude window. It returns a fragment that shows success
+// or the exact error next to the pull request.
+func (s *Server) handleSignoff(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		s.fail(w, err)
+		return
+	}
+	repo := s.cfg.RepoByID(r.FormValue("repo"))
+	if repo == nil {
+		s.render(w, "signoff_result.html", map[string]any{"Error": "unknown repo"})
+		return
+	}
+	number, err := strconv.Atoi(r.FormValue("number"))
+	if err != nil {
+		s.render(w, "signoff_result.html", map[string]any{"Error": "invalid pr number"})
+		return
+	}
+	if err := github.SignOff(repo.Path, number); err != nil {
+		s.render(w, "signoff_result.html", map[string]any{"Error": err.Error()})
+		return
+	}
+	s.render(w, "signoff_result.html", map[string]any{"Number": number})
+}
+
+// handleSignoffAll signs off every open pull request in one repo. It lists the
+// repo pull requests, then calls SignOff for each. It returns a fragment that
+// shows the count signed and lists any failures. A failure on one pull request
+// does not stop the rest.
+func (s *Server) handleSignoffAll(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		s.fail(w, err)
+		return
+	}
+	repo := s.cfg.RepoByID(r.FormValue("repo"))
+	if repo == nil {
+		s.render(w, "signoff_all_result.html", map[string]any{"Error": "unknown repo"})
+		return
+	}
+	pulls, err := github.ListPullRequests(repo.Path, s.cfg.PRLabel)
+	if err != nil {
+		s.render(w, "signoff_all_result.html", map[string]any{"Error": err.Error()})
+		return
+	}
+	res := github.SignOffAll(pulls, func(number int) error {
+		return github.SignOff(repo.Path, number)
+	})
+	s.render(w, "signoff_all_result.html", map[string]any{
+		"Signed":   res.Signed,
+		"Failures": res.Failures,
+	})
+}
+
 // ticketView pairs a ticket with the repo its Linear team maps to. RepoID is
 // empty when no repo lists the team. Then the ticket falls back to the repo
 // selected in the form.
 type ticketView struct {
-	Issue
+	linear.Issue
 	RepoID   string
 	RepoName string
 }
@@ -185,7 +241,7 @@ type ticketGroup struct {
 
 // groupTickets groups tickets by the repo their Linear team maps to. It keeps
 // the order in which each group first appears.
-func groupTickets(cfg *Config, issues []Issue) []*ticketGroup {
+func groupTickets(cfg *config.Config, issues []linear.Issue) []*ticketGroup {
 	var order []string
 	byKey := map[string]*ticketGroup{}
 	for _, issue := range issues {
@@ -225,7 +281,7 @@ func (s *Server) handleProjects(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
-	sessions, err := ListSessions()
+	sessions, err := tmux.ListSessions()
 	if err != nil {
 		s.fail(w, err)
 		return
@@ -235,7 +291,7 @@ func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleSnapshot(w http.ResponseWriter, r *http.Request) {
 	target := r.URL.Query().Get("target")
-	text, err := CapturePane(target)
+	text, err := tmux.CapturePane(target)
 	if err != nil {
 		s.render(w, "snapshot.html", map[string]any{
 			"Target": target,
@@ -258,8 +314,8 @@ func (s *Server) handleNewWindow(w http.ResponseWriter, r *http.Request) {
 	// picker. A project starts a session in its own directory with no worktree.
 	value := r.FormValue("repo")
 	worktree := true
-	var repo *Repo
-	if path, ok := strings.CutPrefix(value, projectPrefix); ok {
+	var repo *config.Repo
+	if path, ok := strings.CutPrefix(value, config.ProjectPrefix); ok {
 		repo = s.cfg.ProjectRepo(path)
 		worktree = false
 	} else {
@@ -284,7 +340,7 @@ func (s *Server) handleNewWindow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sessions, err := ListSessions()
+	sessions, err := tmux.ListSessions()
 	if err != nil {
 		s.fail(w, err)
 		return
@@ -302,11 +358,11 @@ func (s *Server) handleNewWindow(w http.ResponseWriter, r *http.Request) {
 // when a window with the same name already existed, so the worktree lease is
 // left untouched. A project target (worktree false) runs Claude Code in the
 // project directory itself.
-func startWindow(repo *Repo, name, prompt string, worktree bool) (reused bool, err error) {
-	if err := EnsureSession(repo.Session(), repo.Path); err != nil {
+func startWindow(repo *config.Repo, name, prompt string, worktree bool) (reused bool, err error) {
+	if err := tmux.EnsureSession(repo.Session(), repo.Path); err != nil {
 		return false, err
 	}
-	exists, err := HasWindow(repo.Session(), name)
+	exists, err := tmux.HasWindow(repo.Session(), name)
 	if err != nil {
 		return false, err
 	}
@@ -315,12 +371,12 @@ func startWindow(repo *Repo, name, prompt string, worktree bool) (reused bool, e
 	}
 	dir := repo.Path
 	if worktree {
-		dir, err = LeaseWorktree(repo.Path, name)
+		dir, err = treehouse.LeaseWorktree(repo.Path, name)
 		if err != nil {
 			return false, err
 		}
 	}
-	return false, NewWindow(repo.Session(), name, dir, prompt)
+	return false, tmux.NewWindow(repo.Session(), name, dir, prompt)
 }
 
 // sanitizeName maps a name to tmux-safe characters. tmux uses "." and ":" as

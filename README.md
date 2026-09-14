@@ -33,7 +33,7 @@ authenticated; run `gh auth login` once.
 ## Build and run
 
 ```bash
-go build -o tmux-web .
+go build -o tmux-web ./cmd/web
 ./tmux-web
 ```
 
@@ -80,7 +80,7 @@ The unit file is `systemd/tmux-web.service`. It runs as your user, so it shares
 your tmux server.
 
 ```bash
-go build -o ~/.local/bin/tmux-web .
+go build -o ~/.local/bin/tmux-web ./cmd/web
 ln -sf "$PWD/systemd/tmux-web.service" ~/.config/systemd/user/tmux-web.service
 systemctl --user daemon-reload
 systemctl --user enable --now tmux-web.service

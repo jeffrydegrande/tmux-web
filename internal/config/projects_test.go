@@ -1,4 +1,4 @@
-package main
+package config
 
 import (
 	"os"
@@ -34,7 +34,7 @@ func TestSearchProjects(t *testing.T) {
 	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] || got[2] != want[2] {
 		t.Errorf("hits = %v, want %v", got, want)
 	}
-	if hits[0].Value != projectPrefix+filepath.Join(base, "api") {
+	if hits[0].Value != ProjectPrefix+filepath.Join(base, "api") {
 		t.Errorf("value = %q", hits[0].Value)
 	}
 

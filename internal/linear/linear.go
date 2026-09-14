@@ -1,4 +1,4 @@
-package main
+package linear
 
 import (
 	"bytes"
@@ -21,18 +21,18 @@ type Issue struct {
 	TeamKey    string // Linear team key, e.g. "ENG"
 }
 
-// LinearClient calls the Linear API with a personal API key.
-type LinearClient struct {
+// Client calls the Linear API with a personal API key.
+type Client struct {
 	apiKey string
 	http   *http.Client
 }
 
-// NewLinearClient returns a client, or nil when no API key is set.
-func NewLinearClient(apiKey string) *LinearClient {
+// NewClient returns a client, or nil when no API key is set.
+func NewClient(apiKey string) *Client {
 	if apiKey == "" {
 		return nil
 	}
-	return &LinearClient{
+	return &Client{
 		apiKey: apiKey,
 		http:   &http.Client{Timeout: 12 * time.Second},
 	}
@@ -50,7 +50,7 @@ const assignedIssuesQuery = `query {
 // Issues returns the viewer's open assigned tickets. It drops completed and
 // canceled tickets. It also drops tickets that are in review; the GitHub pull
 // requests list covers those instead.
-func (c *LinearClient) Issues() ([]Issue, error) {
+func (c *Client) Issues() ([]Issue, error) {
 	body, _ := json.Marshal(map[string]string{"query": assignedIssuesQuery})
 	req, err := http.NewRequest(http.MethodPost, linearEndpoint, bytes.NewReader(body))
 	if err != nil {
